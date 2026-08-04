@@ -50,7 +50,7 @@ Everything is in `data/`:
 
 Embed the catalogue and retrieve against a natural-language query (or use lexical search if you prefer so!). You can start with a small model you can run locally, but you are free to use any embedding model you like.
 
-If your hardware does not allow you to run a model locally, you can use the Qwen model: `qwen/qwen3-embedding-8b` on OpenRouter. The budget easily covers embedding the full catalogue, but avoid wasteful usage.
+If your hardware does not allow you to run a model locally, you can use the Qwen model: `qwen/qwen3-embedding-8b` on OpenRouter. The budget easily covers embedding the full catalogue, but please be careful with your usage. 
 
 ### b) Offline evaluation
 

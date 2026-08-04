@@ -227,3 +227,4 @@ venv/
 .pytest_cache/
 data/raw/
 .superpowers/
+data/queries_test.json
