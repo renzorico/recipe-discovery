@@ -97,4 +97,4 @@ Response: <list of recipes>
 
 ## How to send it back
 
-A private Git repository. Add dylanjcastillo and idiaz01 as collaborators.
+A private Git repository. Add `dylanjcastillo` and `idiaz01` as collaborators.
