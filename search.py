@@ -1,7 +1,7 @@
 """Entry point. This is the only interface the evaluation depends on.
 
 `evaluation.py` imports this module, calls `warmup()` once, then calls
-`search()` for every query. 
+`search()` for every query.
 
 What is here now is a placeholder that picks recipes at random. It exists so
 the pipeline runs end to end before you have written anything. Replace
@@ -14,13 +14,40 @@ import random
 from pathlib import Path
 
 import pandas as pd
+import numpy as np
+import json
+from sentence_transformers import SentenceTransformer
+
 
 RECIPES = Path(__file__).resolve().parent / "data" / "recipes.parquet"
+EMBEDDINGS_PATH = Path(__file__).resolve().parent / "data" / "embeddings.npy"
 
 MAX_K = 100
 
 _recipe_ids: list[str] = []
+_embeddings = None
+_model = None
+_df = None
 
+def make_recipe_text(row) -> str:
+      tags = ", ".join(json.loads(row["tags"]))
+      ingredients = json.loads(row["ingredients"])
+      ingredient_names = ", ".join(i["name"] for i in ingredients)
+      total_time = (row["cooking_time"] or 0) + (row["preparation_time"] or 0)
+
+      cal = row["calories"] or 0
+      protein = row["protein"] or 0
+      calorie_label = "low-calorie" if cal < 300 else "high-calorie" if cal > 700 else "moderate-calorie"
+      protein_label = "high-protein" if protein > 20 else "low-protein"
+
+      return (
+          f"{row['name']}. "
+          f"Category: {row['RecipeCategory']}. "
+          f"Tags: {tags}. "
+          f"Ingredients: {ingredient_names}. "
+          f"Total time: {total_time} minutes. "
+          f"Nutrition: {calorie_label}, {protein_label}."
+      )
 
 def warmup() -> None:
     """Load or build whatever `search()` needs. Called once, before any query.
@@ -31,10 +58,19 @@ def warmup() -> None:
     Embedding 30,000 recipes takes minutes, so do it here rather than on the
     first query -- otherwise the first `search()` pays the whole cost.
     """
-    # Placeholder set-up: just the list of ids to pick from. Replace.
-    global _recipe_ids
-    frame = pd.read_parquet(RECIPES, columns=["recipe_id"])
-    _recipe_ids = frame["recipe_id"].astype(str).tolist()
+    global _recipe_ids, _df, _model, _embeddings
+    _df = pd.read_parquet(RECIPES)
+    _recipe_ids = _df["recipe_id"].astype(str).tolist()
+    texts = _df.apply(make_recipe_text, axis=1).tolist()
+    _model = SentenceTransformer("all-MiniLM-L6-v2")
+
+    if EMBEDDINGS_PATH.exists():
+        _embeddings = np.load(EMBEDDINGS_PATH).astype(np.float32)
+    else:
+        _embeddings = _model.encode(texts, batch_size=64, show_progress_bar=True).astype(np.float32)
+        np.save(EMBEDDINGS_PATH, _embeddings)
+
+
 
 
 def search(query: str, k: int = 10) -> list[dict]:
