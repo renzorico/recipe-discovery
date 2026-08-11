@@ -228,3 +228,7 @@ venv/
 data/raw/
 .superpowers/
 data/queries_test.json
+data/embeddings.npy
+data/embeddings_new.npy
+*.ipynb
+.ipynb_checkpoints/
