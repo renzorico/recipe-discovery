@@ -12,11 +12,13 @@ from __future__ import annotations
 
 import random
 from pathlib import Path
-
+from llm import LLMClient
 import pandas as pd
+from llm import LLMClient, LLMError
 import numpy as np
 import json
 from sentence_transformers import SentenceTransformer
+
 
 
 RECIPES = Path(__file__).resolve().parent / "data" / "recipes.parquet"
@@ -24,6 +26,7 @@ EMBEDDINGS_PATH = Path(__file__).resolve().parent / "data" / "embeddings.npy"
 
 MAX_K = 100
 
+_texts: list[str] = []
 _recipe_ids: list[str] = []
 _embeddings = None
 _model = None
@@ -58,16 +61,16 @@ def warmup() -> None:
     Embedding 30,000 recipes takes minutes, so do it here rather than on the
     first query -- otherwise the first `search()` pays the whole cost.
     """
-    global _recipe_ids, _df, _model, _embeddings
+    global _recipe_ids, _df, _model, _embeddings, _texts
     _df = pd.read_parquet(RECIPES)
     _recipe_ids = _df["recipe_id"].astype(str).tolist()
-    texts = _df.apply(make_recipe_text, axis=1).tolist()
+    _texts = _df.apply(make_recipe_text, axis=1).tolist()
     _model = SentenceTransformer("all-MiniLM-L6-v2")
 
     if EMBEDDINGS_PATH.exists():
         _embeddings = np.load(EMBEDDINGS_PATH).astype(np.float32)
     else:
-        _embeddings = _model.encode(texts, batch_size=64, show_progress_bar=True).astype(np.float32)
+        _embeddings = _model.encode(_texts, batch_size=64, show_progress_bar=True).astype(np.float32)
         np.save(EMBEDDINGS_PATH, _embeddings)
 
 
@@ -98,17 +101,31 @@ def search(query: str, k: int = 10) -> list[dict]:
     if not _recipe_ids:
         warmup()
 
-    # ---- PLACEHOLDER: delete everything below and return your own results --
-    chosen = random.Random(query).sample(_recipe_ids, min(k, len(_recipe_ids)))
-    return [
-        {
-            "recipe_id": recipe_id,
-            "score": 1.0 - position / k,
-            "explanation": "placeholder result -- search() has not been implemented yet",
-        }
-        for position, recipe_id in enumerate(chosen)
+    client = LLMClient()
+    rewritten = client.rewrite_query(query)
+    query_vector = _model.encode([rewritten]).astype(np.float32)
+    scores = _embeddings @ query_vector.T
+    scores = scores[:, 0]
+    top_indices = np.argsort(scores)[::-1][:k]
+
+    top_recipes = [
+        {"name": _df.iloc[idx]["name"], "text": _texts[idx]}
+        for idx in top_indices
     ]
 
+    try:
+      explanations = client.explain_results(query, top_recipes)
+    except LLMError:
+      explanations = []
+
+    return [
+      {
+          "recipe_id": _recipe_ids[idx],
+          "score": float(scores[idx]),
+          "explanation": explanations[i] if i < len(explanations) else "",
+      }
+      for i, idx in enumerate(top_indices)
+    ]
 
 if __name__ == "__main__":
     import sys

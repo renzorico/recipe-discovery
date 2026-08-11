@@ -32,7 +32,7 @@ class LLMClient:
                       "messages": [{"role": "user", "content": prompt}],
                       "max_tokens": 200,
                   },
-                  timeout=15.0,
+                  timeout=30.0,
               )
               response.raise_for_status()
               content = response.json()["choices"][0]["message"]["content"]
